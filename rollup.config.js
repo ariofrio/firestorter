@@ -38,7 +38,9 @@ export default {
 				'transform-flow-strip-types'
 			],
 			presets: ['es2015-rollup'],
-			exclude: 'node_modules/**'
+			// [ariofrio]: support building when package is a yarn workspace
+			// https://github.com/rollup/rollup-plugin-babel/issues/229
+			exclude: ['node_modules/**', '../../node_modules/**']
 		}),
 		resolve({
 			module: true,
