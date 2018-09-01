@@ -3,6 +3,7 @@ import { observable, transaction, reaction } from 'mobx';
 import { enhancedObservable } from './enhancedObservable';
 import { getFirestore, getFirebase, verifyMode } from './init';
 import isEqual from 'lodash.isequal';
+import isObject from 'lodash.isobject';
 
 import type { DocumentSnapshot, DocumentReference } from 'firebase/firestore';
 
@@ -291,6 +292,8 @@ class Document {
 	 * @return {Object} Result
 	 */
 	static mergeUpdateData(data, fields) {
+		// TODO: Only flatten for set(), and never do path field splitting for set().
+		fields = Document._flattenSetMerge(fields);
 		const res = {
 			...data
 		};
@@ -324,6 +327,27 @@ class Document {
 			}
 		}
 		return res;
+	}
+
+	/**
+	 * @private
+	 */
+	static _flattenSetMerge(obj) {
+		const flattenedObj = {};
+
+		for (const key in obj) {
+			const val = obj[key];
+			const isDelete = val === getFirebase().firestore.FieldValue.delete();
+			if (!isDelete && isObject(val)) {
+				const flattenedVal = this._flattenSetMerge(val)
+				for (const subkey in flattenedVal) {
+					flattenedObj[key + '.' + subkey] = flattenedVal[subkey];
+				}
+			} else {
+				flattenedObj[key] = val;
+			}
+		}
+		return flattenedObj;
 	}
 
 	/**
