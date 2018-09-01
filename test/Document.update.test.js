@@ -19,6 +19,19 @@ test('update field', async () => {
 	expect(doc.data.memberCount).toBe(4);
 });
 
+test('update field synchronously', async () => {
+	expect.assertions(3);
+	const doc = new Document('artists/FooFighters', {sync: true});
+	const updatePromise = doc.update({
+		memberCount: 4
+	});
+	expect(doc.data.memberCount).toBe(4);
+	await updatePromise;
+	expect(doc.data.memberCount).toBe(4);
+	await doc.fetch();
+	expect(doc.data.memberCount).toBe(4);
+});
+
 test('update field with schema', async () => {
 	expect.assertions(1);
 	const doc = new Document('artists/FooFighters', {

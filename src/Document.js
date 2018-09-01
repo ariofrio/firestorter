@@ -33,6 +33,7 @@ function resolveRef(value) {
  * @param {String} [options.mode] See `Document.mode` (default: auto)
  * @param {Object} [options.schema] Superstruct schema for data validation
  * @param {DocumentSnapshot} [options.snapshot] Initial document snapshot
+ * @param {Bool} [options.sync] Don't wait for calls to set and update to be persisted to local storage
  * @param {Bool} [options.debug] Enables debug logging
  * @param {String} [options.debugName] Name to use when debug logging is enabled
  */
@@ -44,6 +45,7 @@ class Document {
 	_ref: any;
 	_snapshot: any;
 	_schema: any;
+	_sync: boolean;
 	_debug: boolean;
 	_debugName: ?string;
 	_collectionRefCount: number;
@@ -58,11 +60,12 @@ class Document {
 		source: DocumentReference | string | (() => string | void),
 		options: any
 	) {
-		const { schema, snapshot, mode, debug, debugName } =
+		const { schema, snapshot, mode, sync, debug, debugName } =
 			options || Document.EMPTY_OPTIONS;
 		this._source = source;
 		this._ref = observable.box(resolveRef(source));
 		this._schema = schema;
+		this._sync = sync || false;
 		this._debug = debug || false;
 		this._debugName = debugName;
 		this._snapshot = observable.box(snapshot);
@@ -340,8 +343,12 @@ class Document {
 	 */
 	update(fields: any): Promise<void> {
 		const ref = this._ref.get();
+		const mergedData = Document.mergeUpdateData(this.data, fields);
 		if (this._schema) {
-			this._validateSchema(Document.mergeUpdateData(this.data, fields));
+			this._validateSchema(mergedData);
+		}
+		if (this._sync && !isEqual(mergedData, this._data.get())) {
+			this._data.set(mergedData);
 		}
 		return ref.update(fields);
 	}
@@ -365,12 +372,13 @@ class Document {
 	 * });
 	 */
 	set(data: any, options: any): Promise<void> {
+		const mergedData = (options && options.merge) ?
+			Document.mergeUpdateData(this.data, data) : data;
 		if (this._schema) {
-			if (options && options.merge) {
-				this._validateSchema(Document.mergeUpdateData(this.data, data));
-			} else {
-				this._validateSchema(data);
+			this._validateSchema(mergedData);
 			}
+		if (this._sync && !isEqual(mergedData, this._data.get())) {
+			this._data.set(mergedData);
 		}
 		return this._ref.get().set(data, options);
 	}
@@ -420,6 +428,18 @@ class Document {
 	_updateFromSnapshot(snapshot: DocumentSnapshot) {
 		const data = this._validateSchema(snapshot.data());
 		this._snapshot.set(snapshot);
+
+		// If this update was already set or merged into data
+		// synchronously, don't attempt to set it again when
+		// the update has been committed to local storage.
+		//
+		// This prevents a race condition where data can move
+		// backwards if updates are happening faster than local
+		// storage can respond. This can be jarring if data is
+		// used as the value in <input> fields, because it resets
+		// the cursor "randomly".
+		if (this._sync && snapshot.metadata.hasPendingWrites)
+			return;
 
 		if (!isEqual(data, this._data.get())) {
 			this._data.set(data);
