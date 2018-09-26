@@ -74,7 +74,7 @@ class Document {
 		this._observedRefCount = 0;
 		let data = snapshot ? snapshot.data() : undefined;
 		if (data) data = this._validateSchema(data);
-		this._data = enhancedObservable(data || Document.EMPTY_OPTIONS, this);
+		this._data = enhancedObservable(data || undefined, this);
 		this._mode = observable.box(verifyMode(mode || 'auto'));
 		this._fetching = observable.box(false);
 		this._updateSourceObserver();
